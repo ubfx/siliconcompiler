@@ -56,12 +56,14 @@ class Schema:
 
         self._init_logger(logger)
 
+        self.__journal = None
+
         if cfg is not None:
             self.cfg = Schema._dict_to_schema(copy.deepcopy(cfg))
         elif manifest is not None:
             # Normalize value to string in case we receive a pathlib.Path
             manifest = str(manifest)
-            self.cfg = Schema._read_manifest(manifest)
+            self.cfg, self.__journal = Schema._read_manifest(manifest)
         else:
             self.cfg = self._init_schema_cfg()
 
@@ -133,13 +135,17 @@ class Schema:
         finally:
             fin.close()
 
+        journal = None
         try:
+            if '__journal__' in localcfg:
+                journal = localcfg['__journal__']
+                del localcfg['__journal__']
             Schema._dict_to_schema(localcfg)
         except (TypeError, ValueError) as e:
             raise ValueError(f'Attempting to read manifest with incompatible schema version: {e}') \
                 from e
 
-        return localcfg
+        return localcfg, journal
 
     def get(self, *keypath, field='value', job=None, step=None, index=None):
         """
@@ -197,8 +203,14 @@ class Schema:
         keypath = args[:-1]
         cfg = self._search(*keypath, insert_defaults=True)
 
-        return self._set(*args, logger=self.logger, cfg=cfg, field=field, clobber=clobber,
-                         step=step, index=index)
+        if self._set(*args, logger=self.logger, cfg=cfg, field=field, clobber=clobber,
+                     step=step, index=index):
+            self.__record_journal("set", keypath,
+                                  value=args[-1],
+                                  field=field,
+                                  step=step, index=index)
+            return True
+        return False
 
     ###########################################################################
     @staticmethod
@@ -302,6 +314,7 @@ class Schema:
             cfg['node'][step][index][field].extend(value)
         else:
             cfg[field].extend(value)
+        self.__record_journal("add", keypath, value=value, field=field, step=step, index=index)
 
         return True
 
@@ -333,6 +346,7 @@ class Schema:
                 return
 
         del cfg[removal_key]
+        self.__record_journal("remove", keypath)
 
     ###########################################################################
     def unset(self, *keypath, step=None, index=None):
@@ -365,6 +379,7 @@ class Schema:
 
         try:
             del cfg['node'][step][index]
+            self.__record_journal("unset", keypath, step=step, index=index)
         except KeyError:
             # If this key doesn't exist, silently continue - it was never set
             pass
@@ -811,7 +826,10 @@ class Schema:
 
     ###########################################################################
     def write_json(self, fout):
-        fout.write(json.dumps(self.cfg, indent=4))
+        localcfg = self.copy().cfg
+        if self.__journal is not None:
+            localcfg['__journal__'] = self.__journal
+        fout.write(json.dumps(localcfg, indent=4))
 
     ###########################################################################
     def write_yaml(self, fout):
@@ -892,7 +910,10 @@ class Schema:
     ###########################################################################
     def copy(self):
         '''Returns deep copy of Schema object.'''
-        return Schema(cfg=self.cfg)
+        newscheme = Schema(cfg=self.cfg)
+        if self.__journal:
+            newscheme.__journal = copy.deepcopy(self.__journal)
+        return newscheme
 
     ###########################################################################
     def prune(self):
@@ -1001,6 +1022,63 @@ class Schema:
         self._init_logger()
 
     #######################################
+    def __record_journal(self, record_type, key, value=None, field=None, step=None, index=None):
+        '''
+        Record the schema transtion
+        '''
+        if self.__journal is None:
+            return
+
+        self.__journal.append({
+            "type": record_type,
+            "key": key,
+            "value": value,
+            "field": field,
+            "step": step,
+            "index": index
+        })
+
+    #######################################
+    def _start_journal(self):
+        '''
+        Start journaling the schema transations
+        '''
+        self.__journal = []
+
+    #######################################
+    def _stop_journal(self):
+        '''
+        Stop journaling the schema transations
+        '''
+        self.__journal = None
+
+    #######################################
+    def _import_journal(self, schema):
+        '''
+        Import the journaled transations from a different schema
+        '''
+        if not schema.__journal:
+            return
+
+        for action in schema.__journal:
+            record_type = action['type']
+            keypath = action['key']
+            value = action['value']
+            field = action['field']
+            step = action['step']
+            index = action['index']
+            if record_type == 'set':
+                self.set(*keypath, value, field=field, step=step, index=index)
+            elif record_type == 'add':
+                self.add(*keypath, value, field=field, step=step, index=index)
+            elif record_type == 'unset':
+                self.unset(*keypath, step=step, index=index)
+            elif record_type == 'remove':
+                self._remove(*keypath)
+            else:
+                raise ValueError(f'Unknown record type {record_type}')
+
+    #######################################
     def get_default(self, *keypath):
         '''Returns default value of a parameter.
 
@@ -1083,10 +1161,8 @@ class Schema:
         Examples:
             >>> schema.create_cmdline(progname='sc-show',switchlist=['-input','-cfg'])
             Creates a command line interface for 'sc-show' app.
-
             >>> schema.create_cmdline(progname='sc', input_map={'v': ('rtl', 'verilog')})
             All sources ending in .v will be stored in ['input', 'rtl', 'verilog']
-
             >>> extra = schema.create_cmdline(progname='sc',
                                               additional_args={'-demo': {'action': 'store_true'}})
             Returns extra = {'demo': False/True}

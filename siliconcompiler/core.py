@@ -415,7 +415,7 @@ If you are sure that your working directory is valid, try running `cd $(pwd)`.""
         Examples:
             >>> chip.register_package_source('siliconcompiler_data',
                     'git+https://github.com/siliconcompiler/siliconcompiler',
-                    'dependency-caching-rebase')
+                    'main')
         """
 
         preset_path = self.get('package', 'source', name, 'path')

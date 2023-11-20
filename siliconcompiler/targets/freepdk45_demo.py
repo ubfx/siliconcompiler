@@ -1,9 +1,9 @@
 import siliconcompiler
 from siliconcompiler.targets import utils
 
-from siliconcompiler.pdks import freepdk45
 from siliconcompiler.flows import lintflow, asicflow, asictopflow
-from siliconcompiler.libs import nangate45
+from lambdapdk import freepdk45
+from lambdapdk.freepdk45.libs import nangate45
 
 
 ####################################################

@@ -1,9 +1,9 @@
 import siliconcompiler
 from siliconcompiler.targets import utils
 
-from siliconcompiler.pdks import asap7
 from siliconcompiler.flows import asicflow
-from siliconcompiler.libs import asap7sc7p5t
+from lambdapdk import asap7
+from lambdapdk.asap7.libs import asap7sc7p5t
 
 
 ####################################################

@@ -2,7 +2,7 @@
 import siliconcompiler
 import os
 
-from siliconcompiler.pdks import freepdk45
+from lambdapdk import freepdk45
 from siliconcompiler.flows import dvflow
 
 

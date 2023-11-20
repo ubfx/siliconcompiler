@@ -1,7 +1,7 @@
 import siliconcompiler
 import pytest
 
-from siliconcompiler.pdks import asap7, freepdk45, skywater130
+from lambdapdk import asap7, freepdk45, sky130
 from siliconcompiler.targets import fpgaflow_demo
 
 
@@ -23,9 +23,11 @@ def test_target_fpga_valid():
     assert chip.get('option', 'mode') == 'fpga'
 
 
-@pytest.mark.parametrize('pdk', [asap7, freepdk45, skywater130])
-def test_pdk(pdk):
-    name = pdk.__name__.split('.')[-1]
+@pytest.mark.parametrize('pdk,name', [
+    (asap7, "asap7"),
+    (freepdk45, "freepdk45"),
+    (sky130, "skywater130")])
+def test_pdk(pdk, name):
     chip = siliconcompiler.Chip('test')
     chip.use(pdk)
     assert chip.getkeys('pdk')[0] == name

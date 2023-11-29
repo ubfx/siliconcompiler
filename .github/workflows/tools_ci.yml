@@ -118,7 +118,6 @@ jobs:
           context: ./sc_${{ matrix.tool }}/
           push: true
           tags: |
-            ${{ matrix.name }}
             ${{ matrix.check_name }}
 
   build_tool_with_deps:
@@ -155,7 +154,6 @@ jobs:
           context: ./sc_${{ matrix.tool }}/
           push: true
           tags: |
-            ${{ matrix.name }}
             ${{ matrix.check_name }}
 
   build_sc_tools:
